@@ -44,7 +44,13 @@ async def login(response: Response, user_data: UserSchema, session: Session = De
     except Exception as e:
         return {"error" : str(e)}
 
-
+@auth_router.post("/logout")
+async def logout(response: Response, session: Session = Depends(get_async_session)):
+    try:
+        response.delete_cookie("access_token")
+        return {"status": "ok"}
+    except Exception as e:
+        return {"error" : str(e)}
 
 app.include_router(auth_router)
 
