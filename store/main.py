@@ -8,12 +8,30 @@ from starlette import status
 from models import get_async_session, Products, Units, Warehouse
 from schemas import Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate
 
+from faststream import FastStream, Logger
+from faststream.kafka import KafkaBroker
+
+
 
 app = FastAPI()
+
+
+
+
+broker = KafkaBroker("localhost:9092")
+appkafka = FastStream(broker)
 
 store_router = APIRouter(prefix="/store", tags=["Store"])
 unit_router = APIRouter(prefix="/unit", tags=["Unit"])
 warehouse_router = APIRouter(prefix="/warehouse", tags=["Warehouse"])
+
+
+@broker.subscriber("user-topic")
+async def get_user_token(result):
+    if result is None:
+        return False
+    else:
+        return True
 
 
 ''' Find product by Id '''

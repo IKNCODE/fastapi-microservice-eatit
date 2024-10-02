@@ -7,9 +7,17 @@ from models import get_async_session, User
 from schemas import UserSchema, UserCreate
 from database_func.db import get_password_hash, verify_password, create_jwt_token, get_current_user
 
+from faststream import FastStream
+from faststream.kafka import KafkaBroker
 app = FastAPI()
 
 auth_router = APIRouter(prefix="/auth", tags=["Auth"]) # Authorization routers
+
+
+
+broker = KafkaBroker("localhost:9092")
+app = FastStream(broker)
+
 
 
 
@@ -40,6 +48,7 @@ async def login(response: Response, user_data: UserSchema, session: Session = De
         if await verify_password(user_dict['password'], result.scalars().first().hashed_password) == True:
             access_token = await create_jwt_token({"sub": str(user_dict.get("login"))})
             response.set_cookie("access_token", access_token, httponly=True)
+            await broker.publish(get_current_user(), topic="user-topic")
             return {"access_token": access_token, "status": "ok"}
     except Exception as e:
         return {"error" : str(e)}
