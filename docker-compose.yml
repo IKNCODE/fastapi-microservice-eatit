@@ -1,0 +1,62 @@
+services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "8082:80"
+    networks:
+      - custom
+    volumes:
+      - ./api_gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - auth
+      - store
+
+  auth:
+    build:
+      context: ./auth
+      dockerfile: Dockerfile
+    container_name: auth
+    networks:
+      - custom
+
+    ports:
+      - "8000:8000"
+    depends_on:
+      - auth_db
+
+  auth_db:
+    image: postgres:13
+    networks:
+      - custom
+    environment:
+      POSTGRES_DB: eatit_auth
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+
+  store:
+    build:
+      context: ./store
+      dockerfile: Dockerfile
+    container_name: store
+    networks:
+      - custom
+    ports:
+      - "8001:8001"
+    depends_on:
+      - store_db
+
+  store_db:
+    image: postgres:13
+    networks:
+      - custom
+    environment:
+      POSTGRES_DB: eatit_store
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 123
+
+
+
+
+networks:
+  custom:
+    driver: bridge

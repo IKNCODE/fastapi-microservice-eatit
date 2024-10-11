@@ -1,12 +1,17 @@
+from fastapi import Request
+
+import uvicorn
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, Response
+from fastapi.openapi.docs import get_swagger_ui_html
 from sqlalchemy.orm import Session
-from starlette import status
+
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select, insert, delete, func
 
 from models import get_async_session, User
 from schemas import UserSchema, UserCreate
 from database_func.db import get_password_hash, verify_password, create_jwt_token, get_current_user
-
+import json
 from faststream import FastStream
 from faststream.kafka import KafkaBroker
 app = FastAPI()
@@ -15,8 +20,7 @@ auth_router = APIRouter(prefix="/auth", tags=["Auth"]) # Authorization routers
 
 
 
-broker = KafkaBroker("localhost:9092")
-app = FastStream(broker)
+
 
 
 
@@ -47,9 +51,8 @@ async def login(response: Response, user_data: UserSchema, session: Session = De
         result = await session.execute(query)
         if await verify_password(user_dict['password'], result.scalars().first().hashed_password) == True:
             access_token = await create_jwt_token({"sub": str(user_dict.get("login"))})
-            response.set_cookie("access_token", access_token, httponly=True)
-            await broker.publish(get_current_user(), topic="user-topic")
-            return {"access_token": access_token, "status": "ok"}
+            response.set_cookie("Authorization", access_token, httponly=True)
+            return {"Authorization": access_token, "status": "ok"}
     except Exception as e:
         return {"error" : str(e)}
 
@@ -61,6 +64,29 @@ async def logout(response: Response, session: Session = Depends(get_async_sessio
     except Exception as e:
         return {"error" : str(e)}
 
+
+@app.get(app.root_path + "/openapi.json")
+async def custom_swagger_ui_html():
+    return app.openapi()
+
+origins = [
+    "http://localhost:8082",
+    "http://127.0.0.1:8082"
+]
+
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 app.include_router(auth_router)
+
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=8000)
 
 

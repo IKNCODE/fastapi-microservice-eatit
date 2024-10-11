@@ -1,6 +1,10 @@
 from typing import List
 
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi_users import jwt
+import jwt
+from jwt import PyJWTError
 from sqlalchemy.orm import Session
 from sqlalchemy import select, insert, delete, func, update
 from starlette import status
@@ -15,24 +19,29 @@ from faststream.kafka import KafkaBroker
 
 app = FastAPI()
 
+SECRET_KEY = "d3432h54iu3fh894utf83jfidc9238ry8923djfc92"
+ALGORITHM = "HS256"
 
+security = HTTPBearer()
 
-
-broker = KafkaBroker("localhost:9092")
-appkafka = FastStream(broker)
+async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except PyJWTError:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid token"
+        )
 
 store_router = APIRouter(prefix="/store", tags=["Store"])
 unit_router = APIRouter(prefix="/unit", tags=["Unit"])
 warehouse_router = APIRouter(prefix="/warehouse", tags=["Warehouse"])
 
 
-@broker.subscriber("user-topic")
-async def get_user_token(result):
-    if result is None:
-        return False
-    else:
-        return True
-
+@store_router.get("/protected-endpoint")
+async def protected_endpoint(payload: dict = Depends(verify_token)):
+    return {"message": "This is a protected endpoint", "payload": payload}
 
 ''' Find product by Id '''
 @store_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[ProductsResponse])

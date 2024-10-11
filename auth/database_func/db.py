@@ -24,7 +24,7 @@ async def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 async def check_jwt_cookie(request: Request):
-    acc_tkn = request.cookies.get("access_token")
+    acc_tkn = request.cookies.get("Authorization")
     if acc_tkn is None:
         raise HTTPException(status_code=401, detail="Access token is missing")
     return acc_tkn
