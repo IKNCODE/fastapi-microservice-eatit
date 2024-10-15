@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from config import *
 from typing import AsyncGenerator
 from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, Integer, String, ForeignKey, Boolean, TIMESTAMP, Text
+from sqlalchemy import Column, Integer, Float, String, ForeignKey, Boolean, TIMESTAMP, Text
 
 engine = create_async_engine(DB_CONN)
 async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
@@ -16,13 +16,20 @@ class Warehouse(BaseModel):
     __tablename__ = "warehouse"
 
     warehouse_id = Column(Integer, primary_key=True, autoincrement=True)
-    location = Column(String, nullable=False)
+    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=False)
 
 class Units(BaseModel):
     __tablename__ = "units"
 
     unit_id = Column(Integer, primary_key=True, autoincrement=True)
     unit_name = Column(String, nullable=False)
+
+class Category(BaseModel):
+    __tablename__ = "category"
+    category_id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=False)
 
 class Products(BaseModel):
     __tablename__ = "products"
@@ -33,6 +40,14 @@ class Products(BaseModel):
     count = Column(Integer, nullable=False)
     price = Column(Integer, nullable=False)
     warehouse_id = Column(Integer, ForeignKey("warehouse.warehouse_id"), nullable=False)
+    description = Column(String, nullable=False)
+    carb = Column(Integer, nullable=False)
+    protein = Column(Integer, nullable=False)
+    fats = Column(Integer, nullable=False)
+    calories = Column(Integer, nullable=False)
+    composition = Column(String, nullable=False)
+    store_condition = Column(String, nullable=False)
+    category_id = Column(Integer, ForeignKey("category.category_id"), nullable=False)
 
 async def create_db_and_tables():
     async with engine.begin() as conn:
