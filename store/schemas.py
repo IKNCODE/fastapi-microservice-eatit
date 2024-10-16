@@ -17,13 +17,10 @@ class UnitResponse(BaseModel):
 
 class Categories(BaseModel):
     name: str
-    descr: str
+    description: str
 
 class CategoriesResponse(BaseModel):
     Category: Categories = Field()
-
-class CategoryResponse(BaseModel):
-    CategoryResponse: Categories = Field()
 
 class ProductsCreate(BaseModel):
     name: str

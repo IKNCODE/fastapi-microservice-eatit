@@ -9,8 +9,9 @@ from sqlalchemy.orm import Session
 from sqlalchemy import select, insert, delete, func, update
 from starlette import status
 
-from models import get_async_session, Products, Units, Warehouse
-from schemas import Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate
+from models import get_async_session, Products, Units, Warehouse, Category
+from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate, Categories,
+                     CategoriesResponse)
 
 from faststream import FastStream, Logger
 from faststream.kafka import KafkaBroker
@@ -37,6 +38,7 @@ async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(secur
 store_router = APIRouter(prefix="/store", tags=["Store"])
 unit_router = APIRouter(prefix="/unit", tags=["Unit"])
 warehouse_router = APIRouter(prefix="/warehouse", tags=["Warehouse"])
+category_router = APIRouter(prefix="/category", tags=["Category"])
 
 
 @store_router.get("/protected-endpoint")
@@ -175,11 +177,60 @@ async def update_unit(warehouse: Warehouses, id: int, session: Session = Depends
     except Exception as ex:
         return {"error" : str(ex)}
 
-''' Delete unit '''
+''' Delete warehouse '''
 @warehouse_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_unit(id: int, session: Session = Depends(get_async_session)):
+async def delete_ware(id: int, session: Session = Depends(get_async_session)):
     try:
         query = delete(Warehouse).where(Warehouse.warehouse_id == id)
+        result = await session.execute(query)
+        await session.commit()
+        return {"result" : "ok"}
+    except Exception as ex:
+        return {"error" : str(ex)}
+
+
+''' Select all categories '''
+@category_router.get("/c/all", status_code=status.HTTP_200_OK, response_model=List[CategoriesResponse])
+async def get_all_categories(session: Session = Depends(get_async_session)):
+    query = select(Category).order_by(Category.category_id)
+    result = await session.execute(query)
+    return result
+
+''' Find category by Id '''
+@category_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[CategoriesResponse])
+async def get_category_by_id(id: int, session: Session = Depends(get_async_session)):
+    query = select(Category).where(Category.category_id == id)
+    result = await session.execute(query)
+    return result.mappings().all()
+
+
+''' Add category '''
+@category_router.post("/add", status_code=status.HTTP_200_OK)
+async def add_category(category: Categories, session: Session = Depends(get_async_session)):
+    try:
+        query = insert(Category).values(**category.dict())
+        result = await session.execute(query)
+        await session.commit()
+        return {"status" : "ok"}
+    except Exception as ex:
+        return {"error" : str(ex)}
+
+''' Update category '''
+@category_router.put("/update/{id}", status_code=status.HTTP_200_OK)
+async def update_category(category: Categories, id: int, session: Session = Depends(get_async_session)):
+    try:
+        query = update(Category).where(Category.category_id == id).values(**category.dict())
+        result = await session.execute(query)
+        await session.commit()
+        return {"result" : "ok"}
+    except Exception as ex:
+        return {"error" : str(ex)}
+
+''' Delete category '''
+@category_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
+async def delete_category(id: int, session: Session = Depends(get_async_session)):
+    try:
+        query = delete(Category).where(Category.category_id == id)
         result = await session.execute(query)
         await session.commit()
         return {"result" : "ok"}
@@ -189,3 +240,4 @@ async def delete_unit(id: int, session: Session = Depends(get_async_session)):
 app.include_router(store_router)
 app.include_router(unit_router)
 app.include_router(warehouse_router)
+app.include_router(category_router)
