@@ -2,7 +2,7 @@ from itertools import product
 from typing import List
 import logging
 import logging.config
-
+import pythonjsonlogger
 from config import LOG_DICT
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer

@@ -1,7 +1,8 @@
 FROM python:3.12
 
 COPY requirements.txt requiremenets.txt
-RUN pip install -r requiremenets.txt
+RUN pip install psycopg2 \
+    && pip install -r requiremenets.txt
 
 COPY . .
 EXPOSE 8001

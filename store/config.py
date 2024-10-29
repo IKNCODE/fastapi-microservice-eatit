@@ -1,4 +1,5 @@
 from dotenv import load_dotenv
+import pythonjsonlogger
 
 import os
 
@@ -21,6 +22,31 @@ LOG_DICT = {
         'standard' : {
             'format' : '[%(asctime)s] %(levelname)s in %(module)s: %(message)s',
         },
+        "json": {  # The formatter name
+            "()": "pythonjsonlogger.jsonlogger.JsonFormatter",  # The class to instantiate!
+            # Json is more complex, but easier to read, display all attributes!
+            "format": """
+                   asctime: %(asctime)s
+                   created: %(created)f
+                   filename: %(filename)s
+                   funcName: %(funcName)s
+                   levelname: %(levelname)s
+                   levelno: %(levelno)s
+                   lineno: %(lineno)d
+                   message: %(message)s
+                   module: %(module)s
+                   msec: %(msecs)d
+                   name: %(name)s
+                   pathname: %(pathname)s
+                   process: %(process)d
+                   processName: %(processName)s
+                   relativeCreated: %(relativeCreated)d
+                   thread: %(thread)d
+                   threadName: %(threadName)s
+                   exc_info: %(exc_info)s
+               """,
+            "datefmt": "%Y-%m-%d %H:%M:%S",  # How to display dates
+        },
     },
     'handlers' : {
         'default' : {
@@ -30,7 +56,7 @@ LOG_DICT = {
 
         },
         "file":{
-            "formatter":"standard",
+            "formatter":"json",
             "class":"logging.FileHandler",
             "level":"INFO",
             "filename":"./logs/host_metrics_app.log",
