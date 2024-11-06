@@ -29,11 +29,19 @@ class UnitResponse(BaseModel):
     Units: Unit = Field()
 
 class Categories(BaseModel):
+    category_id : int
+    name: str
+    description: str
+
+class CategoriesCreate(BaseModel):
     name: str
     description: str
 
 class CategoriesResponse(BaseModel):
     Category: Categories = Field()
+
+class CategoriesCreateResponse(BaseModel):
+    Category: CategoriesCreate = Field()
 
 class ProductsCreate(BaseModel):
     name: str
