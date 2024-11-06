@@ -12,12 +12,19 @@ class UnitCreateResponse(BaseModel):
     Unit: UnitCreate = Field()
 
 class Warehouses(BaseModel):
+    warehouse_id : int
+    longitude: float
+    latitude: float
+
+class WarehousesCreate(BaseModel):
     longitude: float
     latitude: float
 
 class WarehouseResponse(BaseModel):
     Warehouse: Warehouses = Field()
 
+class WarehouseCreateResponse(BaseModel):
+    Warehouse: WarehousesCreate = Field()
 class UnitResponse(BaseModel):
     Units: Unit = Field()
 

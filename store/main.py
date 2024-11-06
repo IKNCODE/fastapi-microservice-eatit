@@ -14,7 +14,7 @@ from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
 from models import get_async_session, Products, Units, Warehouse, Category
 from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate, Categories,
-                     CategoriesResponse, UnitCreateResponse, UnitCreate)
+                     CategoriesResponse, UnitCreateResponse, UnitCreate, WarehouseCreateResponse, WarehousesCreate)
 
 app = FastAPI()
 
@@ -117,7 +117,6 @@ async def delete_product(id: int, session: AsyncSession = Depends(get_async_sess
 
 ''' Cache all_unit '''
 async def update_unit_cache(session: AsyncSession = Depends(get_async_session)):
-    logging.info("run get_all_units router")
     query = select(Units.unit_id, Units.unit_name).order_by(Units.unit_name)
     logging.info("selecting units from db")
     result = await session.execute(query)
@@ -134,6 +133,7 @@ async def update_unit_cache(session: AsyncSession = Depends(get_async_session)):
 @unit_router.get("/u/all", status_code=status.HTTP_200_OK, response_model=List[UnitResponse])
 async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
+        logging.info("run get_all_units router")
         cache_data = await get_data('unit_all')
         if not cache_data:
             await update_unit_cache(session)
@@ -157,7 +157,6 @@ async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_sess
             for i in cache_data:
                 if i['Units']['unit_id'] == id:
                     result = i
-            logging.error(f'unit with {id} id not found')
             return result
         except KeyError:
             return "ID doesn't exist"
@@ -211,28 +210,52 @@ async def delete_unit(id: int, session: AsyncSession = Depends(get_async_session
         logging.error(f"error while deleting unit with {id} id", exc_info=ex)
         return {"error" : str(ex)}
 
+
+''' Cache all_warehouse'''
+async def update_warehouse_cache(session: AsyncSession = Depends(get_async_session)):
+    query = select(Warehouse.warehouse_id, Warehouse.latitude, Warehouse.longitude).order_by(Warehouse.warehouse_id)
+    logging.info("selecting warehouse from db")
+    result = await session.execute(query)
+    logging.info("query was execute sucessfully")
+    dict_t = result.mappings().all()
+    dt = []
+    for item in dict_t:
+        new_dict = {"Warehouse": dict(warehouse_id=item['warehouse_id'], latitude=item['latitude'],
+                                      longitude=item['longitude'])}
+        dt.append(new_dict)
+    json_dict = json.dumps(dt, default=str)
+    await set_data_long("warehouse_all", json_dict)
+
 ''' Select all warehouses '''
 @warehouse_router.get("/w/all", status_code=status.HTTP_200_OK, response_model=List[WarehouseResponse])
 async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting warehouses from db")
-        query = select(Warehouse).order_by(Warehouse.warehouse_id)
-        result = await session.execute(query)
-        logging.info("query was execute sucessfully")
-        return result
+        cache_data = await get_data('warehouse_all')
+        if not cache_data:
+            await update_warehouse_cache(session)
+            cache_data = await get_data('warehouse_all')
+        cache_data = json.loads(cache_data)
+        return cache_data
     except Exception as e:
         logging.error(f"error while selecting data from db", exc_info=e)
         return {"error" : str(e)}
 
 ''' Find warehouse by Id '''
-@warehouse_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[WarehouseResponse])
+@warehouse_router.get("/{id}", status_code=status.HTTP_200_OK)
 async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting warehouses from db by id")
-        query = select(Warehouse).where(Warehouse.warehouse_id == id)
-        result = await session.execute(query)
-        logging.info("query was execute sucessfully")
-        return result.mappings().all()
+        try:
+            cache_data = await get_data('warehouse_all')
+            cache_data = json.loads(cache_data)
+            result = "warehouse does not exist"
+            for i in cache_data:
+                if i['Warehouse']['warehouse_id'] == id:
+                    result = i
+            return result
+        except KeyError:
+            return "ID doesn't exist"
     except Exception as e:
         logging.error(f"error while selecting unit by {id} id", exc_info=e)
         return {"error" : str(e)}
@@ -240,13 +263,14 @@ async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_sess
 
 ''' Add warehouse '''
 @warehouse_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_unit(warehouse: Warehouses, session: AsyncSession = Depends(get_async_session)):
+async def add_unit(warehouse: WarehousesCreate, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("inserting warehouse into db")
         query = insert(Warehouse).values(**warehouse.dict())
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
+        await update_warehouse_cache(session)
         return {"status" : "ok"}
     except Exception as ex:
         logging.error(f"error while inserting warehouse with {warehouse} data", exc_info=ex)
@@ -254,13 +278,14 @@ async def add_unit(warehouse: Warehouses, session: AsyncSession = Depends(get_as
 
 ''' Update warehouse '''
 @warehouse_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_unit(warehouse: Warehouses, id: int, session: AsyncSession = Depends(get_async_session)):
+async def update_unit(warehouse: WarehousesCreate, id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("updating warehouse")
         query = update(Warehouse).where(Warehouse.warehouse_id == id).values(**warehouse.dict())
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
+        await update_warehouse_cache(session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while updating warehouse with {id} id and new data: {warehouse}", exc_info=ex)
@@ -275,6 +300,7 @@ async def delete_ware(id: int, session: AsyncSession = Depends(get_async_session
         result = await session.execute(query)
         logging.info("commit execute")
         await session.commit()
+        await update_warehouse_cache(session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while deleting warehouse by {id} id", exc_info=ex)
