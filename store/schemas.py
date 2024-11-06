@@ -2,8 +2,14 @@ from pydantic import BaseModel, Field
 from models import Units, Products, Category
 
 class Unit(BaseModel):
+    unit_id : int
     unit_name: str
 
+class UnitCreate(BaseModel):
+    unit_name : str
+
+class UnitCreateResponse(BaseModel):
+    Unit: UnitCreate = Field()
 
 class Warehouses(BaseModel):
     longitude: float

@@ -1,26 +1,20 @@
-from itertools import product
+import json
 from typing import List
 import logging
 import logging.config
-import pythonjsonlogger
 from config import LOG_DICT
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi_users import jwt
 import jwt
+from cache.main import get_data, set_data, set_data_long
 from jwt import PyJWTError
-from sqlalchemy.orm import Session
-from sqlalchemy import select, insert, delete, func, update
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
-
 from models import get_async_session, Products, Units, Warehouse, Category
 from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate, Categories,
-                     CategoriesResponse)
-
-from faststream import FastStream, Logger
-from faststream.kafka import KafkaBroker
-
-
+                     CategoriesResponse, UnitCreateResponse, UnitCreate)
 
 app = FastAPI()
 
@@ -31,7 +25,6 @@ security = HTTPBearer()
 
 logging.config.dictConfig(LOG_DICT)
 
-logging.error('ddddd')
 async def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
         payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
@@ -54,7 +47,7 @@ async def protected_endpoint(payload: dict = Depends(verify_token)):
 
 ''' Find product by Id '''
 @store_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[ProductsResponse])
-async def get_product_by_id(id: int, session: Session = Depends(get_async_session)):
+async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_product_by_id router")
         query = select(Products).where(Products.product_id == id)
@@ -67,7 +60,7 @@ async def get_product_by_id(id: int, session: Session = Depends(get_async_sessio
 
 ''' Select all products '''
 @store_router.get("/p/all", status_code=status.HTTP_200_OK, response_model=List[ProductsResponse])
-async def get_all_product(session: Session = Depends(get_async_session)):
+async def get_all_product(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_all_product router")
         query = select(Products).order_by(Products.name.asc())
@@ -79,22 +72,22 @@ async def get_all_product(session: Session = Depends(get_async_session)):
 
 ''' Add product '''
 @store_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_product(product: ProductsCreate, session: Session = Depends(get_async_session)):
+async def add_product(product: ProductsCreate, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run add_product router")
-        query = insert(Products).values(**product.dict())
+        query = insert(Products).values(**product.dict()).returning(literal_column('*'))
         logging.info("run query for inserting product into database")
         result = await session.execute(query)
         await session.commit()
-        logging.info("product inserted successfully")
-        return {"status" : "ok"}
+        logging.info(f"product inserted successfully, Product: {result}")
+        return {"status" : f"{result.mappings().all()[0]['product_id']}"}
     except Exception as ex:
         logging.error(f"error in database", exc_info=ex)
         return {"error" : str(ex)}
 
 ''' Update product '''
 @store_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_product(product: ProductsCreate, id: int, session: Session = Depends(get_async_session)):
+async def update_product(product: ProductsCreate, id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run update_product router")
         query = update(Products).where(Products.product_id == id).values(**product.dict())
@@ -109,7 +102,7 @@ async def update_product(product: ProductsCreate, id: int, session: Session = De
 
 ''' Delete product '''
 @store_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_product(id: int, session: Session = Depends(get_async_session)):
+async def delete_product(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run delete_product router")
         query = delete(Products).where(Products.product_id == id)
@@ -122,29 +115,52 @@ async def delete_product(id: int, session: Session = Depends(get_async_session))
         logging.error(f"error in database", exc_info=ex)
         return {"error" : str(ex)}
 
+''' Cache all_unit '''
+async def update_unit_cache(session: AsyncSession = Depends(get_async_session)):
+    logging.info("run get_all_units router")
+    query = select(Units.unit_id, Units.unit_name).order_by(Units.unit_name)
+    logging.info("selecting units from db")
+    result = await session.execute(query)
+    logging.info("query was execute sucessfully")
+    dict_t = result.mappings().all()
+    dt = []
+    for item in dict_t:
+        new_dict = {"Units": {"unit_id": item['unit_id'], "unit_name": item['unit_name']}}
+        dt.append(new_dict)
+    json_dict = json.dumps(dt, default=str)
+    await set_data_long("unit_all", json_dict)
+
 ''' Select all units '''
 @unit_router.get("/u/all", status_code=status.HTTP_200_OK, response_model=List[UnitResponse])
-async def get_all_units(session: Session = Depends(get_async_session)):
+async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
-        logging.info("run get_all_units router")
-        query = select(Units).order_by(Units.unit_name)
-        logging.info("selecting units from db")
-        result = await session.execute(query)
-        logging.info("query was execute sucessfully")
-        return result
+        cache_data = await get_data('unit_all')
+        if not cache_data:
+            await update_unit_cache(session)
+            cache_data = await get_data('unit_all')
+        cache_data = json.loads(cache_data)
+        return cache_data
     except Exception as e:
         logging.error("error while selecting data from db", exc_info=e)
         return {"error" : str(e)}
 
 ''' Find unit by Id '''
-@unit_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[UnitResponse])
-async def get_unit_by_id(id: int, session: Session = Depends(get_async_session)):
+@unit_router.get("/{id}", status_code=status.HTTP_200_OK)
+async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_unit_by_id")
         logging.info("selecting units from db")
-        query = select(Units).where(Units.unit_id == id)
-        result = await session.execute(query)
-        return result.mappings().all()
+        try:
+            cache_data = await get_data('unit_all')
+            cache_data = json.loads(cache_data)
+            result = "unit does not exist"
+            for i in cache_data:
+                if i['Units']['unit_id'] == id:
+                    result = i
+            logging.error(f'unit with {id} id not found')
+            return result
+        except KeyError:
+            return "ID doesn't exist"
     except Exception as e:
         logging.error(f"error while selecting unit by {id} id", exc_info=e)
         return {"error" : str(e)}
@@ -152,13 +168,14 @@ async def get_unit_by_id(id: int, session: Session = Depends(get_async_session))
 
 ''' Add unit '''
 @unit_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_unit(unit: Unit, session: Session = Depends(get_async_session)):
+async def add_unit(unit: UnitCreate, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("inserting unit into db")
         query = insert(Units).values(**unit.dict())
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
+        await update_unit_cache(session)
         return {"status" : "ok"}
     except Exception as ex:
         logging.error(f"error while add unit with {unit} data", exc_info=ex)
@@ -166,13 +183,14 @@ async def add_unit(unit: Unit, session: Session = Depends(get_async_session)):
 
 ''' Update unit '''
 @unit_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_unit(unit: Unit, id: int, session: Session = Depends(get_async_session)):
+async def update_unit(unit: UnitCreate, id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("updating unit in db")
         query = update(Units).where(Units.unit_id == id).values(**unit.dict())
         result = await session.execute(query)
         logging.info("commit execute")
         await session.commit()
+        await update_unit_cache(session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while update unit with id: {id} and new data: {unit}", exc_info=ex)
@@ -180,13 +198,14 @@ async def update_unit(unit: Unit, id: int, session: Session = Depends(get_async_
 
 ''' Delete unit '''
 @unit_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_unit(id: int, session: Session = Depends(get_async_session)):
+async def delete_unit(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("deleting unit from db")
         query = delete(Units).where(Units.unit_id == id)
         result = await session.execute(query)
         logging.info("commit execute")
         await session.commit()
+        await update_unit_cache(session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while deleting unit with {id} id", exc_info=ex)
@@ -194,7 +213,7 @@ async def delete_unit(id: int, session: Session = Depends(get_async_session)):
 
 ''' Select all warehouses '''
 @warehouse_router.get("/w/all", status_code=status.HTTP_200_OK, response_model=List[WarehouseResponse])
-async def get_all_units(session: Session = Depends(get_async_session)):
+async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting warehouses from db")
         query = select(Warehouse).order_by(Warehouse.warehouse_id)
@@ -207,7 +226,7 @@ async def get_all_units(session: Session = Depends(get_async_session)):
 
 ''' Find warehouse by Id '''
 @warehouse_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[WarehouseResponse])
-async def get_unit_by_id(id: int, session: Session = Depends(get_async_session)):
+async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting warehouses from db by id")
         query = select(Warehouse).where(Warehouse.warehouse_id == id)
@@ -221,7 +240,7 @@ async def get_unit_by_id(id: int, session: Session = Depends(get_async_session))
 
 ''' Add warehouse '''
 @warehouse_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_unit(warehouse: Warehouses, session: Session = Depends(get_async_session)):
+async def add_unit(warehouse: Warehouses, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("inserting warehouse into db")
         query = insert(Warehouse).values(**warehouse.dict())
@@ -235,7 +254,7 @@ async def add_unit(warehouse: Warehouses, session: Session = Depends(get_async_s
 
 ''' Update warehouse '''
 @warehouse_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_unit(warehouse: Warehouses, id: int, session: Session = Depends(get_async_session)):
+async def update_unit(warehouse: Warehouses, id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("updating warehouse")
         query = update(Warehouse).where(Warehouse.warehouse_id == id).values(**warehouse.dict())
@@ -249,7 +268,7 @@ async def update_unit(warehouse: Warehouses, id: int, session: Session = Depends
 
 ''' Delete warehouse '''
 @warehouse_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_ware(id: int, session: Session = Depends(get_async_session)):
+async def delete_ware(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("deleting warehouse")
         query = delete(Warehouse).where(Warehouse.warehouse_id == id)
@@ -264,7 +283,7 @@ async def delete_ware(id: int, session: Session = Depends(get_async_session)):
 
 ''' Select all categories '''
 @category_router.get("/c/all", status_code=status.HTTP_200_OK, response_model=List[CategoriesResponse])
-async def get_all_categories(session: Session = Depends(get_async_session)):
+async def get_all_categories(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting categories from db")
         query = select(Category).order_by(Category.category_id)
@@ -277,7 +296,7 @@ async def get_all_categories(session: Session = Depends(get_async_session)):
 
 ''' Find category by Id '''
 @category_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[CategoriesResponse])
-async def get_category_by_id(id: int, session: Session = Depends(get_async_session)):
+async def get_category_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting categories from db by id")
         query = select(Category).where(Category.category_id == id)
@@ -290,7 +309,7 @@ async def get_category_by_id(id: int, session: Session = Depends(get_async_sessi
 
 ''' Add category '''
 @category_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_category(category: Categories, session: Session = Depends(get_async_session)):
+async def add_category(category: Categories, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("inserting category")
         query = insert(Category).values(**category.dict())
@@ -304,7 +323,7 @@ async def add_category(category: Categories, session: Session = Depends(get_asyn
 
 ''' Update category '''
 @category_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_category(category: Categories, id: int, session: Session = Depends(get_async_session)):
+async def update_category(category: Categories, id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("updating category")
         query = update(Category).where(Category.category_id == id).values(**category.dict())
@@ -318,7 +337,7 @@ async def update_category(category: Categories, id: int, session: Session = Depe
 
 ''' Delete category '''
 @category_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_category(id: int, session: Session = Depends(get_async_session)):
+async def delete_category(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("deleting category")
         query = delete(Category).where(Category.category_id == id)
