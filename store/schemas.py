@@ -58,6 +58,22 @@ class ProductsCreate(BaseModel):
     store_condition: str
     category_id: int
 
+class ProductsSelect(BaseModel):
+    name: str
+    unit_name: str
+    warehouse_id: int
+    count: int
+    price: int
+    description: str
+    carb: int
+    protein: int
+    fats: int
+    calories: int
+    composition: str
+    store_condition: str
+    category: str
+
+
 class ProductsResponse(BaseModel):
     Products: ProductsCreate = Field()
 

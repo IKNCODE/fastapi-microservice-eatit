@@ -3,24 +3,29 @@ from typing import List
 import logging
 import logging.config
 from config import LOG_DICT
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, Depends, HTTPException, APIRouter, Response
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from fastapi_users import jwt
 import jwt
+import pika
+from config import connection, channel, connection_params
 from cache.main import get_data, set_data, set_data_long
 from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
 from models import get_async_session, Products, Units, Warehouse, Category
-from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsResponse, ProductsCreate, Categories,
+from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsCreate, ProductsResponse, Categories,
                      CategoriesResponse, UnitCreateResponse, UnitCreate, WarehouseCreateResponse, WarehousesCreate,
-                     CategoriesCreateResponse, CategoriesCreate)
+                     CategoriesCreateResponse, CategoriesCreate, ProductsSelect)
 
 app = FastAPI()
 
 SECRET_KEY = "d3432h54iu3fh894utf83jfidc9238ry8923djfc92"
 ALGORITHM = "HS256"
+
+queue_name = 'hello'
 
 security = HTTPBearer()
 
@@ -58,18 +63,49 @@ async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_s
     except Exception as e:
         logging.error(f"error in database with input {id}", exc_info=e)
 
+''' Add product to Basket'''
+@store_router.get("/basket_add/{id}", status_code=status.HTTP_200_OK)
+async def basket_add(uuid: str, id: int, session: AsyncSession = Depends(get_async_session)):
+    try:
+        logging.info("run basket_add router")
+        query = select(Products.name, Products.product_id, Products.price, Units.unit_name, Products.count,
+                       Category.name.label("category")).join(Units, Products.unit == Units.unit_id).join(
+            Category, Products.category_id == Category.category_id).where(Products.product_id == id)
+        logging.info("run query for find product by id")
+        result = await session.execute(query)
+        channel = connection.channel()
+        channel.queue_declare(queue=queue_name)
+        dic = dict(result.mappings().all()[0])
+        dic.update({"uuid" : uuid})
+        message = str(dic)
+        channel.basic_publish(
+            exchange='',
+            routing_key=queue_name,
+            body=message
+        )
+        channel.close()
+        logging.info(f"Sent: '{message}'")
+        await session.commit()
+    except Exception as e:
+        logging.error(f"error in database", exc_info=e)
+        return {"error" : str(e)}
 
 ''' Select all products '''
-@store_router.get("/p/all", status_code=status.HTTP_200_OK, response_model=List[ProductsResponse])
+@store_router.get("/p/all", status_code=status.HTTP_200_OK, response_model=List[ProductsSelect])
 async def get_all_product(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_all_product router")
-        query = select(Products).order_by(Products.name.asc())
+        query = select(Products.name, Units.unit_name, Products.warehouse_id, Products.count,
+                       Products.price, Products.description, Products.carb, Products.protein,
+                       Products.fats, Products.calories, Products.composition,
+                       Products.store_condition, Category.name.label("category")).join(Units, Products.unit == Units.unit_id).join(
+            Category, Products.category_id == Category.category_id).order_by(Products.name.asc())
         logging.info("run query for selecting all products")
         result = await session.execute(query)
-        return result
+        return result.mappings().all()
     except Exception as e:
         logging.error(f"error in database", exc_info=e)
+
 
 ''' Add product '''
 @store_router.post("/add", status_code=status.HTTP_200_OK)
@@ -85,6 +121,7 @@ async def add_product(product: ProductsCreate, session: AsyncSession = Depends(g
     except Exception as ex:
         logging.error(f"error in database", exc_info=ex)
         return {"error" : str(ex)}
+
 
 ''' Update product '''
 @store_router.put("/update/{id}", status_code=status.HTTP_200_OK)
@@ -320,6 +357,7 @@ async def update_category_cache(session: AsyncSession = Depends(get_async_sessio
                                       name=item['name'])}
         dt.append(new_dict)
     json_dict = json.dumps(dt, default=str)
+    logging.info(f"json dict = {json_dict}")
     await set_data_long("category_all", json_dict)
 
 ''' Select all categories '''
@@ -328,6 +366,7 @@ async def get_all_categories(session: AsyncSession = Depends(get_async_session))
     try:
         cache_data = await get_data('category_all')
         if not cache_data:
+            print("dddddddd")
             await update_category_cache(session)
             cache_data = await get_data('category_all')
         cache_data = json.loads(cache_data)
@@ -399,6 +438,14 @@ async def delete_category(id: int, session: AsyncSession = Depends(get_async_ses
     except Exception as ex:
         logging.error(f"error while deleting category with {id} id", exc_info=ex)
         return {"error" : str(ex)}
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(store_router)
 app.include_router(unit_router)
