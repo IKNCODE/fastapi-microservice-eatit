@@ -1,12 +1,16 @@
 services:
+
   nginx:
-    image: nginx:alpine
+    build:
+      context: ./api_gateway/nginx_docker
+      dockerfile: Dockerfile
     ports:
       - "8082:80"
     networks:
       - custom
     volumes:
-      - ./api_gateway/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./api_gateway/lua-resty-jwt:/etc/nginx/lua-resty-jwt
+      - ./api_gateway/lua-resty-hmac:/etc/nginx/lua-resty-hmac
     depends_on:
       - auth
       - store
@@ -56,10 +60,36 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 123
 
+  basket:
+    build:
+      context: ./basket
+      dockerfile: Dockerfile
+    container_name: basket
+    networks:
+      - custom
+    ports:
+      - "8002:8002"
+    depends_on:
+      - rabbitmq
+
+  rabbitmq:
+    image: rabbitmq:3.10.7-management
+    hostname: rabbitmq
+    restart: always
+    environment:
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbit disk_free_limit 2147483648
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    networks:
+      - custom
+
   redis:
-    image: redis:6-alpine
+    image: redis
     ports:
       - "6379:6379"
+    networks:
+      - custom
 
   beats:
     image: elastic/filebeat:7.16.2
