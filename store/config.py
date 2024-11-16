@@ -1,6 +1,6 @@
 from dotenv import load_dotenv
 import pythonjsonlogger
-
+import pika
 import os
 
 load_dotenv()
@@ -10,6 +10,26 @@ DB_PORT = os.environ.get('DB_PORT')
 DB_NAME = os.environ.get('DB_NAME')
 DB_USER = os.environ.get('DB_USER')
 DB_PASS = os.environ.get('DB_PASS')
+
+
+
+# Параметры подключения
+connection_params = pika.ConnectionParameters(
+    host='rabbitmq',  # Замените на адрес вашего RabbitMQ сервера
+    port=5672,          # Порт по умолчанию для RabbitMQ
+    virtual_host='/',   # Виртуальный хост (обычно '/')
+    credentials=pika.PlainCredentials(
+        username='guest',  # Имя пользователя по умолчанию
+        password='guest'   # Пароль по умолчанию
+    ),
+    heartbeat=0
+)
+
+# Установка соединения
+connection = pika.BlockingConnection(connection_params)
+
+# Создание канала
+channel = connection.channel()
 
 LOG_DICT = {
     'version': 1,
