@@ -12,12 +12,6 @@ async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 class BaseModel(DeclarativeBase):
     pass
-class Warehouse(BaseModel):
-    __tablename__ = "warehouse"
-
-    warehouse_id = Column(Integer, primary_key=True, autoincrement=True)
-    longitude = Column(Float, nullable=False)
-    latitude = Column(Float, nullable=False)
 
 class Units(BaseModel):
     __tablename__ = "units"
@@ -36,10 +30,10 @@ class Products(BaseModel):
 
     product_id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
+    article = Column(String, nullable=False)
     unit = Column(Integer, ForeignKey("units.unit_id"), nullable=False)
     count = Column(Integer, nullable=False)
     price = Column(Integer, nullable=False)
-    warehouse_id = Column(Integer, ForeignKey("warehouse.warehouse_id"), nullable=False)
     description = Column(String, nullable=False)
     carb = Column(Integer, nullable=False)
     protein = Column(Integer, nullable=False)

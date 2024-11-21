@@ -12,10 +12,9 @@ DB_USER = os.environ.get('DB_USER')
 DB_PASS = os.environ.get('DB_PASS')
 
 
-
 # Параметры подключения
 connection_params = pika.ConnectionParameters(
-    host='rabbitmq',  # Замените на адрес вашего RabbitMQ сервера
+    host='localhost',  # Замените на адрес вашего RabbitMQ сервера
     port=5672,          # Порт по умолчанию для RabbitMQ
     virtual_host='/',   # Виртуальный хост (обычно '/')
     credentials=pika.PlainCredentials(

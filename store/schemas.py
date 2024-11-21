@@ -1,4 +1,6 @@
-from pydantic import BaseModel, Field
+from typing import Annotated, Optional
+
+from pydantic import BaseModel, Field, validator
 from models import Units, Products, Category
 
 class Unit(BaseModel):
@@ -11,20 +13,6 @@ class UnitCreate(BaseModel):
 class UnitCreateResponse(BaseModel):
     Unit: UnitCreate = Field()
 
-class Warehouses(BaseModel):
-    warehouse_id : int
-    longitude: float
-    latitude: float
-
-class WarehousesCreate(BaseModel):
-    longitude: float
-    latitude: float
-
-class WarehouseResponse(BaseModel):
-    Warehouse: Warehouses = Field()
-
-class WarehouseCreateResponse(BaseModel):
-    Warehouse: WarehousesCreate = Field()
 class UnitResponse(BaseModel):
     Units: Unit = Field()
 
@@ -46,7 +34,7 @@ class CategoriesCreateResponse(BaseModel):
 class ProductsCreate(BaseModel):
     name: str
     unit: int
-    warehouse_id: int
+    article: str
     count: int
     price: int
     description: str
@@ -61,7 +49,7 @@ class ProductsCreate(BaseModel):
 class ProductsSelect(BaseModel):
     name: str
     unit_name: str
-    warehouse_id: int
+    article: Optional[str] = ""
     count: int
     price: int
     description: str
@@ -72,6 +60,12 @@ class ProductsSelect(BaseModel):
     composition: str
     store_condition: str
     category: str
+
+    @validator("article")
+    def validate_notes(cls, article):
+        return article if article is not None else ""
+
+
 
 
 class ProductsResponse(BaseModel):

@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+import pika
 
 load_dotenv()
 
