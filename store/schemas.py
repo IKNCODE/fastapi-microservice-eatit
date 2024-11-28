@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, validator
 from models import Units, Products, Category
 
 class Unit(BaseModel):
-    unit_id : int
+    unit_id: int
     unit_name: str
 
 class UnitCreate(BaseModel):

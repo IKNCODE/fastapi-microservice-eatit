@@ -16,9 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
 from models import get_async_session, Products, Units, Category
-from schemas import (Unit, UnitResponse, ProductsCreate, ProductsResponse, Categories,
-                     CategoriesResponse, UnitCreateResponse, UnitCreate,
-                     CategoriesCreateResponse, CategoriesCreate, ProductsSelect)
+from schemas import (UnitResponse, ProductsCreate, ProductsResponse,
+                     CategoriesResponse, UnitCreate,
+                     CategoriesCreate, ProductsSelect)
 
 app = FastAPI()
 
