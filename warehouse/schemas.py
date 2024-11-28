@@ -13,3 +13,7 @@ class WarehouseCreateResponse(BaseModel):
     name: str
     longitude: float
     latitude: float
+
+class ProductCreate(BaseModel):
+    articles: int
+    count: int
