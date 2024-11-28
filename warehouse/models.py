@@ -22,8 +22,8 @@ class Warehouses(BaseModel):
 
     warehouse_id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String, nullable=False)
-    longitude = Column(Integer, nullable=False)
-    latitude = Column(Integer, nullable=False)
+    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=False)
 
 class ProductsWarehouses(BaseModel):
     __tablename__ = "products_warehouses"
