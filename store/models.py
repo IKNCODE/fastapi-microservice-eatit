@@ -12,12 +12,7 @@ async_session_maker = async_sessionmaker(engine, expire_on_commit=False)
 
 class BaseModel(DeclarativeBase):
     pass
-class Warehouse(BaseModel):
-    __tablename__ = "warehouse"
 
-    warehouse_id = Column(Integer, primary_key=True, autoincrement=True)
-    longitude = Column(Float, nullable=False)
-    latitude = Column(Float, nullable=False)
 
 class Units(BaseModel):
     __tablename__ = "units"
