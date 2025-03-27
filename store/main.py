@@ -52,8 +52,9 @@ async def protected_endpoint(payload: dict = Depends(verify_token)):
     return {"message": "This is a protected endpoint", "payload": payload}
 
 ''' Find product by Id '''
-@store_router.get("/{id}", status_code=status.HTTP_200_OK, response_model=List[ProductsResponse])
-async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
+@store_router.get("/{id}", status_code=status.HTTP_200_OK)
+async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session),
+                            payload: dict = Depends(verify_token)):
     try:
         logging.info("run get_product_by_id router")
         query = select(Products).where(Products.product_id == id)
@@ -109,7 +110,8 @@ async def get_all_product(session: AsyncSession = Depends(get_async_session)):
 
 ''' Add product '''
 @store_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_product(product: ProductsCreate, session: AsyncSession = Depends(get_async_session)):
+async def add_product(product: ProductsCreate, session: AsyncSession = Depends(get_async_session),
+                      payload: dict = Depends(verify_token)):
     try:
         logging.info("run add_product router")
         query = insert(Products).values(**product.dict()).returning(literal_column('*'))
@@ -125,7 +127,8 @@ async def add_product(product: ProductsCreate, session: AsyncSession = Depends(g
 
 ''' Update product '''
 @store_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_product(product: ProductsCreate, id: int, session: AsyncSession = Depends(get_async_session)):
+async def update_product(product: ProductsCreate, id: int, session: AsyncSession = Depends(get_async_session)
+                         , payload: dict = Depends(verify_token)):
     try:
         logging.info("run update_product router")
         query = update(Products).where(Products.product_id == id).values(**product.dict())
@@ -140,7 +143,8 @@ async def update_product(product: ProductsCreate, id: int, session: AsyncSession
 
 ''' Delete product '''
 @store_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_product(id: int, session: AsyncSession = Depends(get_async_session)):
+async def delete_product(id: int, session: AsyncSession = Depends(get_async_session),
+                         payload: dict = Depends(verify_token)):
     try:
         logging.info("run delete_product router")
         query = delete(Products).where(Products.product_id == id)
@@ -211,7 +215,8 @@ async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_sess
 
 ''' Add unit '''
 @unit_router.post("/add", status_code=status.HTTP_200_OK)
-async def add_unit(unit: UnitCreate, session: AsyncSession = Depends(get_async_session)):
+async def add_unit(unit: UnitCreate, session: AsyncSession = Depends(get_async_session),
+                   payload: dict = Depends(verify_token)):
     try:
         logging.info("inserting unit into db")
         query = insert(Units).values(**unit.dict())
@@ -226,7 +231,8 @@ async def add_unit(unit: UnitCreate, session: AsyncSession = Depends(get_async_s
 
 ''' Update unit '''
 @unit_router.put("/update/{id}", status_code=status.HTTP_200_OK)
-async def update_unit(unit: UnitCreate, id: int, session: AsyncSession = Depends(get_async_session)):
+async def update_unit(unit: UnitCreate, id: int, session: AsyncSession = Depends(get_async_session),
+                      payload: dict = Depends(verify_token)):
     try:
         logging.info("updating unit in db")
         query = update(Units).where(Units.unit_id == id).values(**unit.dict())
@@ -241,7 +247,8 @@ async def update_unit(unit: UnitCreate, id: int, session: AsyncSession = Depends
 
 ''' Delete unit '''
 @unit_router.delete("/delete/{id}", status_code=status.HTTP_200_OK)
-async def delete_unit(id: int, session: AsyncSession = Depends(get_async_session)):
+async def delete_unit(id: int, session: AsyncSession = Depends(get_async_session),
+                      payload: dict = Depends(verify_token)):
     try:
         logging.info("deleting unit from db")
         query = delete(Units).where(Units.unit_id == id)

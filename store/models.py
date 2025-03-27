@@ -39,7 +39,6 @@ class Products(BaseModel):
     unit = Column(Integer, ForeignKey("units.unit_id"), nullable=False)
     count = Column(Integer, nullable=False)
     price = Column(Integer, nullable=False)
-    warehouse_id = Column(Integer, ForeignKey("warehouse.warehouse_id"), nullable=False)
     description = Column(String, nullable=False)
     carb = Column(Integer, nullable=False)
     protein = Column(Integer, nullable=False)

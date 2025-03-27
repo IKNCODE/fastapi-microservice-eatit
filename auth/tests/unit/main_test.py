@@ -8,10 +8,26 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../.
 
 from main import app
 
+
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_authorization():
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://127.0.0.1:8082") as client:
         response = await client.post("/auth/login", json={"login":"1231", "password":"123"})
+        await client.aclose()
+    assert response.status_code == 200
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_registration():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://127.0.0.1:8082") as client:
+        response = await client.post("/auth/register", json={
+                                                          "email": "example.example1@example.com",
+                                                          "password": "examplePass",
+                                                          "is_active": True,
+                                                          "is_superuser": True,
+                                                          "is_verified": False,
+                                                          "login": "example.example1",
+                                                        })
         await client.aclose()
     assert response.status_code == 200
 
