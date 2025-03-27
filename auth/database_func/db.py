@@ -46,13 +46,18 @@ async def get_current_user(token: str = Depends(check_jwt_cookie), session: Asyn
             raise HTTPException(status_code=401, detail="Token is invalid")
         user = select(User).where(User.login == str(user_login))
         user = await session.execute(user)
-        print("ok")
         if not user:
             raise HTTPException(status_code=401, detail="User does not exist")
         return user
     except Exception as e:
         raise HTTPException(status_code=401, detail=str(e))
 
+async def verify_login(login: str, session: AsyncSession = Depends(get_async_session)) -> bool:
+    user = select(User).where(User.login == str(login))
+    user = await session.execute(user)
+    if not user.scalars().all():
+        return False
+    return True
 
 async def verify_password(plain_password: str, hashed_password: str) -> bool:
     return pwd_context.verify(plain_password, hashed_password)

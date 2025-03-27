@@ -10,7 +10,7 @@ from fastapi_users import jwt
 import jwt
 import pika
 from config import connection, channel, connection_params
-from cache.main import get_data, set_data, set_data_long
+from cache.main import get_data, set_data, set_data_long, check_connection
 from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete, update, literal_column, values
@@ -91,11 +91,11 @@ async def basket_add(uuid: str, id: int, session: AsyncSession = Depends(get_asy
         return {"error" : str(e)}
 
 ''' Select all products '''
-@store_router.get("/p/all", status_code=status.HTTP_200_OK, response_model=List[ProductsSelect])
+@store_router.get("/p/all", status_code=status.HTTP_200_OK)
 async def get_all_product(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_all_product router")
-        query = select(Products.name, Units.unit_name, Products.warehouse_id, Products.count,
+        query = select(Products.name, Units.unit_name, Products.count,
                        Products.price, Products.description, Products.carb, Products.protein,
                        Products.fats, Products.calories, Products.composition,
                        Products.store_condition, Category.name.label("category")).join(Units, Products.unit == Units.unit_id).join(
@@ -168,10 +168,16 @@ async def update_unit_cache(session: AsyncSession = Depends(get_async_session)):
     await set_data_long("unit_all", json_dict)
 
 ''' Select all units '''
-@unit_router.get("/u/all", status_code=status.HTTP_200_OK, response_model=List[UnitResponse])
+@unit_router.get("/u/all", status_code=status.HTTP_200_OK , response_model=List[UnitResponse])
 async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_all_units router")
+        if not await check_connection():
+            query = select(Units).order_by(Units.unit_name)
+            logging.info("selecting units from db")
+            result = await session.execute(query)
+            logging.info("query was execute sucessfully")
+            return result.mappings().all()
         cache_data = await get_data('unit_all')
         if not cache_data:
             await update_unit_cache(session)
@@ -269,6 +275,12 @@ async def update_warehouse_cache(session: AsyncSession = Depends(get_async_sessi
 async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting warehouses from db")
+        if not await check_connection():
+            query = select(Warehouse)
+            logging.info("selecting warehouse from db")
+            result = await session.execute(query)
+            logging.info("query was execute sucessfully")
+            return result.mappings().all()
         cache_data = await get_data('warehouse_all')
         if not cache_data:
             await update_warehouse_cache(session)

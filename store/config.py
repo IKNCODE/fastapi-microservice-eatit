@@ -1,6 +1,9 @@
+import sys
+
 from dotenv import load_dotenv
 import pythonjsonlogger
 import pika
+from pika.exceptions import AMQPConnectionError
 import os
 
 load_dotenv()
@@ -15,7 +18,7 @@ DB_PASS = os.environ.get('DB_PASS')
 
 # Параметры подключения
 connection_params = pika.ConnectionParameters(
-    host='rabbitmq',  # Замените на адрес вашего RabbitMQ сервера
+    host='localhost',  # Замените на адрес вашего RabbitMQ сервера
     port=5672,          # Порт по умолчанию для RabbitMQ
     virtual_host='/',   # Виртуальный хост (обычно '/')
     credentials=pika.PlainCredentials(
@@ -24,12 +27,19 @@ connection_params = pika.ConnectionParameters(
     ),
     heartbeat=0
 )
-
+connection = None
+channel = None
 # Установка соединения
-connection = pika.BlockingConnection(connection_params)
+try:
+    connection = pika.BlockingConnection(connection_params)
+    channel = connection.channel()
+except AMQPConnectionError:
+    print("Ошибка AMQPConnectionError! Невозможно подключиться к брокеру сообщений!")
 
-# Создание канала
-channel = connection.channel()
+
+
+
+log_file = os.path.join(os.path.dirname(__file__), "logs/host_metrics_app.log")
 
 LOG_DICT = {
     'version': 1,
@@ -79,7 +89,7 @@ LOG_DICT = {
             "formatter":"json",
             "class":"logging.FileHandler",
             "level":"INFO",
-            "filename":"./logs/host_metrics_app.log",
+            "filename":f"{log_file}",
             'mode' : 'a',
         }
     },
