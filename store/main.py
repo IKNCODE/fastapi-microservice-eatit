@@ -15,7 +15,7 @@ from jwt import PyJWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
-from models import get_async_session, Products, Units, Warehouse, Category
+from models import get_async_session, Products, Units, Category
 from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsCreate, ProductsResponse, Categories,
                      CategoriesResponse, UnitCreateResponse, UnitCreate, WarehouseCreateResponse, WarehousesCreate,
                      CategoriesCreateResponse, CategoriesCreate, ProductsSelect)
@@ -53,8 +53,7 @@ async def protected_endpoint(payload: dict = Depends(verify_token)):
 
 ''' Find product by Id '''
 @store_router.get("/{id}", status_code=status.HTTP_200_OK)
-async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session),
-                            payload: dict = Depends(verify_token)):
+async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_product_by_id router")
         query = select(Products).where(Products.product_id == id)
