@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, insert, delete, update, literal_column, values
 from starlette import status
 from models import get_async_session, Products, Units, Category
-from schemas import (Unit, Warehouses, WarehouseResponse, UnitResponse, ProductsCreate, ProductsResponse, Categories,
+from schemas import (Unit, Warehouses, WarehouseResponse, ProductsCreate, ProductsResponse, Categories,
                      CategoriesResponse, UnitCreateResponse, UnitCreate, WarehouseCreateResponse, WarehousesCreate,
                      CategoriesCreateResponse, CategoriesCreate, ProductsSelect)
 
@@ -51,15 +51,36 @@ category_router = APIRouter(prefix="/category", tags=["Category"])
 async def protected_endpoint(payload: dict = Depends(verify_token)):
     return {"message": "This is a protected endpoint", "payload": payload}
 
+async def get_entity_by_id(id : int, entity, session: AsyncSession):
+    try:
+        model_id = entity.__table__.primary_key.columns.values()[0].name
+        query = select(entity).where(getattr(entity, model_id) == id)
+        result = await session.execute(query)
+        return result.mappings().all()
+    except Exception as e:
+        return {"message": str(e)}
+
+async def get_all_from_cache(key: str, entity, order, session: AsyncSession = Depends(get_async_session())):
+    cache_data = await get_data(key)
+    if not cache_data:
+        query = select(entity).order_by(order)
+        result = await session.execute(query)
+        data = [obj.__dict__ for obj in result.scalars().all()]
+        for item in data:
+            item.pop("_sa_instance_state", None)
+        data = json.dumps(data, default=str)
+        await set_data_long(key, data)
+        return json.loads(data)
+    return json.loads(cache_data)
+
 ''' Find product by Id '''
 @store_router.get("/{id}", status_code=status.HTTP_200_OK)
 async def get_product_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_product_by_id router")
-        query = select(Products).where(Products.product_id == id)
-        result = await session.execute(query)
+        result = await get_entity_by_id(id, Products, session)
         logging.info("router get_product_by_id router sucessful")
-        return result.mappings().all()
+        return result
     except Exception as e:
         logging.error(f"error in database with input {id}", exc_info=e)
 
@@ -156,22 +177,8 @@ async def delete_product(id: int, session: AsyncSession = Depends(get_async_sess
         logging.error(f"error in database", exc_info=ex)
         return {"error" : str(ex)}
 
-''' Cache all_unit '''
-async def update_unit_cache(session: AsyncSession = Depends(get_async_session)):
-    query = select(Units.unit_id, Units.unit_name).order_by(Units.unit_name)
-    logging.info("selecting units from db")
-    result = await session.execute(query)
-    logging.info("query was execute sucessfully")
-    dict_t = result.mappings().all()
-    dt = []
-    for item in dict_t:
-        new_dict = {"Units": {"unit_id": item['unit_id'], "unit_name": item['unit_name']}}
-        dt.append(new_dict)
-    json_dict = json.dumps(dt, default=str)
-    await set_data_long("unit_all", json_dict)
-
 ''' Select all units '''
-@unit_router.get("/u/all", status_code=status.HTTP_200_OK , response_model=List[UnitResponse])
+@unit_router.get("/u/all", status_code=status.HTTP_200_OK , response_model=List[Unit])
 async def get_all_units(session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("run get_all_units router")
@@ -181,11 +188,7 @@ async def get_all_units(session: AsyncSession = Depends(get_async_session)):
             result = await session.execute(query)
             logging.info("query was execute sucessfully")
             return result.mappings().all()
-        cache_data = await get_data('unit_all')
-        if not cache_data:
-            await update_unit_cache(session)
-            cache_data = await get_data('unit_all')
-        cache_data = json.loads(cache_data)
+        cache_data = await get_all_from_cache('unit_all', Units, Units.unit_name, session)
         return cache_data
     except Exception as e:
         logging.error("error while selecting data from db", exc_info=e)
@@ -197,9 +200,11 @@ async def get_unit_by_id(id: int, session: AsyncSession = Depends(get_async_sess
     try:
         logging.info("run get_unit_by_id")
         logging.info("selecting units from cache")
+        if not await check_connection():
+            result = await get_entity_by_id(id, Units, session)
+            return result
         try:
-            cache_data = await get_data('unit_all')
-            cache_data = json.loads(cache_data)
+            cache_data = await get_all_from_cache('unit_all', Units, Units.unit_name, session)
             result = "unit does not exist"
             for i in cache_data:
                 if i['Units']['unit_id'] == id:
@@ -222,8 +227,8 @@ async def add_unit(unit: UnitCreate, session: AsyncSession = Depends(get_async_s
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
-        await update_unit_cache(session)
-        return {"status" : "ok"}
+        await get_all_from_cache('unit_all', Units, Units.unit_name, session)
+        return {"status" : "Sucessfully added"}
     except Exception as ex:
         logging.error(f"error while add unit with {unit} data", exc_info=ex)
         return {"error" : str(ex)}
@@ -238,7 +243,7 @@ async def update_unit(unit: UnitCreate, id: int, session: AsyncSession = Depends
         result = await session.execute(query)
         logging.info("commit execute")
         await session.commit()
-        await update_unit_cache(session)
+        await get_all_from_cache('unit_all', Units, Units.unit_name, session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while update unit with id: {id} and new data: {unit}", exc_info=ex)
@@ -254,39 +259,18 @@ async def delete_unit(id: int, session: AsyncSession = Depends(get_async_session
         result = await session.execute(query)
         logging.info("commit execute")
         await session.commit()
-        await update_unit_cache(session)
+        await get_all_from_cache('unit_all', Units, Units.unit_name, session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while deleting unit with {id} id", exc_info=ex)
         return {"error" : str(ex)}
 
-''' Cache all_category'''
-async def update_category_cache(session: AsyncSession = Depends(get_async_session)):
-    query = select(Category.category_id, Category.description, Category.name).order_by(Category.category_id)
-    logging.info("selecting category from db")
-    result = await session.execute(query)
-    logging.info("query was execute sucessfully")
-    dict_t = result.mappings().all()
-    dt = []
-    for item in dict_t:
-        new_dict = {"Category": dict(category_id=item['category_id'], description=item['description'],
-                                      name=item['name'])}
-        dt.append(new_dict)
-    json_dict = json.dumps(dt, default=str)
-    logging.info(f"json dict = {json_dict}")
-    await set_data_long("category_all", json_dict)
-
 ''' Select all categories '''
-@category_router.get("/c/all", status_code=status.HTTP_200_OK, response_model=List[CategoriesResponse])
+@category_router.get("/c/all", status_code=status.HTTP_200_OK, response_model=List[Categories])
 async def get_all_categories(session: AsyncSession = Depends(get_async_session)):
     try:
-        cache_data = await get_data('category_all')
-        if not cache_data:
-            print("dddddddd")
-            await update_category_cache(session)
-            cache_data = await get_data('category_all')
-        cache_data = json.loads(cache_data)
-        return cache_data
+        result = await get_all_from_cache('category_all', Category, Category.name, session)
+        return result
     except Exception as e:
         logging.error(f"error while selecting data from db", exc_info=e)
         return {"error" : str(e)}
@@ -296,6 +280,9 @@ async def get_all_categories(session: AsyncSession = Depends(get_async_session))
 async def get_category_by_id(id: int, session: AsyncSession = Depends(get_async_session)):
     try:
         logging.info("selecting category from cache by id")
+        if not await check_connection():
+            result = await get_entity_by_id(id, Category, session)
+            return result
         try:
             cache_data = await get_data('category_all')
             cache_data = json.loads(cache_data)
@@ -319,7 +306,7 @@ async def add_category(category: CategoriesCreate, session: AsyncSession = Depen
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
-        await update_category_cache(session)
+        await get_all_from_cache("category_all", Category, Category.name, session)
         return {"status" : "ok"}
     except Exception as ex:
         logging.error(f"error while inserting category with {category} data", exc_info=ex)
@@ -334,7 +321,7 @@ async def update_category(category: CategoriesCreate, id: int, session: AsyncSes
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
-        await update_category_cache(session)
+        await get_all_from_cache("category_all", Category, Category.name, session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while updating category with {id} id and {category} data", exc_info=ex)
@@ -349,7 +336,7 @@ async def delete_category(id: int, session: AsyncSession = Depends(get_async_ses
         result = await session.execute(query)
         logging.info("commit data")
         await session.commit()
-        await update_category_cache(session)
+        await get_all_from_cache("category_all", Category, Category.name, session)
         return {"result" : "ok"}
     except Exception as ex:
         logging.error(f"error while deleting category with {id} id", exc_info=ex)

@@ -25,8 +25,6 @@ class WarehouseResponse(BaseModel):
 
 class WarehouseCreateResponse(BaseModel):
     Warehouse: WarehousesCreate = Field()
-class UnitResponse(BaseModel):
-    Units: Unit = Field()
 
 class Categories(BaseModel):
     category_id : int

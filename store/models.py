@@ -19,7 +19,6 @@ class Units(BaseModel):
 
     unit_id = Column(Integer, primary_key=True, autoincrement=True)
     unit_name = Column(String, nullable=False)
-
 class Category(BaseModel):
     __tablename__ = "category"
     category_id = Column(Integer, primary_key=True, autoincrement=True)
