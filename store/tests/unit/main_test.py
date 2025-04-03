@@ -37,6 +37,14 @@ async def test_get_unit():
         await client.aclose()
     assert response.status_code == 200
 
+''' Test getting all categories'''
+@pytest.mark.asyncio(loop_scope="session")
+async def test_get_category():
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://localhost:8000") as client:
+        response = await client.get("category/c/all")
+        await client.aclose()
+    assert response.status_code == 200
+
 
 
 
